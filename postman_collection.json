@@ -1,0 +1,162 @@
+{
+  "info": {
+    "name": "Tenpo Backend Challenge",
+    "description": "Cálculo con porcentaje dinámico, historial de llamadas, rate limiting y resiliencia ante fallos del servicio externo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Calculation",
+      "item": [
+        {
+          "name": "Calcular num1 + num2 + porcentaje (caso feliz)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"num1\": 5,\n  \"num2\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/calculate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "calculate"]
+            },
+            "description": "Ejemplo del enunciado: num1=5, num2=5, servicio externo retorna 10% -> resultado 11"
+          }
+        },
+        {
+          "name": "Calcular - num1 faltante (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"num2\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/calculate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "calculate"]
+            },
+            "description": "Debe responder 400 con el detalle de validación (num1 es obligatorio)."
+          }
+        },
+        {
+          "name": "Calcular - números decimales",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"num1\": 12.5,\n  \"num2\": 7.25\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/calculate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "calculate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "History",
+      "item": [
+        {
+          "name": "Consultar historial (página 0, tamaño 10)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/history?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "history"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            },
+            "description": "El registro de llamadas es asíncrono: puede tardar unos milisegundos en aparecer tras un POST /calculate."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Resiliencia y límites (demostración)",
+      "item": [
+        {
+          "name": "Forzar fallo del servicio externo (dispara retry)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/mock/external/percentage?fail=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["mock", "external", "percentage"],
+              "query": [{ "key": "fail", "value": "true" }]
+            },
+            "description": "Llamada directa al mock del servicio externo para ver el error 503 simulado. Para ver el retry/circuit breaker en acción sobre /calculate, subir external.percentage-service.failure-rate en la config (ver README)."
+          }
+        },
+        {
+          "name": "Rate limit - 4ta llamada en <60s debe dar 429",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"num1\": 1,\n  \"num2\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/calculate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "calculate"]
+            },
+            "description": "Ejecuta esta request 4 veces seguidas en menos de un minuto: las primeras 3 responden 200, la 4ta debe responder 429 Too Many Requests."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documentación",
+      "item": [
+        {
+          "name": "Swagger UI",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/swagger-ui.html",
+              "host": ["{{baseUrl}}"],
+              "path": ["swagger-ui.html"]
+            }
+          }
+        },
+        {
+          "name": "OpenAPI JSON",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v3/api-docs",
+              "host": ["{{baseUrl}}"],
+              "path": ["v3", "api-docs"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

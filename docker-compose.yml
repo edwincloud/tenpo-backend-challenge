@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tenpo_challenge
+      POSTGRES_USER: tenpo
+      POSTGRES_PASSWORD: tenpo
+    ports:
+      - "5432:5432"
+    volumes:
+      - tenpo_challenge_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenpo -d tenpo_challenge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    # Por defecto compila la imagen localmente. Para usar la imagen ya publicada en vez de
+    # compilar, hay que comentar "build: ." y descomentar una de estas dos líneas:
+    # image: edwin290683/tenpo-backend-challenge:latest       # Docker Hub
+    # image: ghcr.io/edwincloud/tenpo-backend-challenge:latest # GitHub Container Registry
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tenpo_challenge
+      DB_USER: tenpo
+      DB_PASSWORD: tenpo
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  tenpo_challenge_pgdata:

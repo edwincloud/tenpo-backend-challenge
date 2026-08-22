@@ -1,0 +1,78 @@
+name: Publicar imagen Docker
+
+# Corre después de que CI (build-and-test) termine exitosamente sobre main, o al crear un
+# tag de versión (v1.0.0, etc). No se dispara en pull requests: solo se publica imagen desde
+# código ya mergeado a main.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  check-dockerhub-secrets:
+    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      has-dockerhub: ${{ steps.check.outputs.has-dockerhub }}
+    steps:
+      - id: check
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "has-dockerhub=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-dockerhub=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-push:
+    needs: check-dockerhub-secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # GHCR usa el GITHUB_TOKEN que ya provee Actions: no requiere configurar secrets aparte.
+      - name: Login a GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Docker Hub requiere DOCKERHUB_USERNAME y DOCKERHUB_TOKEN configurados como secrets
+      # del repositorio (Settings > Secrets and variables > Actions). Si no están, este paso
+      # y el push a Docker Hub simplemente se saltan -no rompe el resto del workflow-.
+      - name: Login a Docker Hub
+        if: needs.check-dockerhub-secrets.outputs.has-dockerhub == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Definir tags de la imagen
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            ${{ needs.check-dockerhub-secrets.outputs.has-dockerhub == 'true' && format('{0}/tenpo-backend-challenge', secrets.DOCKERHUB_USERNAME) || '' }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=sha
+
+      - name: Build y push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

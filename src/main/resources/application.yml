@@ -1,0 +1,74 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: tenpo-challenge
+
+  r2dbc:
+    url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:tenpo_challenge}
+    username: ${DB_USER:tenpo}
+    password: ${DB_PASSWORD:tenpo}
+    pool:
+      enabled: true
+      initial-size: 5
+      max-size: 20
+
+  # Flyway corre las migraciones vía JDBC en el arranque (R2DBC no soporta migraciones),
+  # apuntando a la misma base de datos que usa la app en runtime.
+  flyway:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:tenpo_challenge}
+    user: ${DB_USER:tenpo}
+    password: ${DB_PASSWORD:tenpo}
+    locations: classpath:db/migration
+
+# Servicio externo (mock) de porcentaje
+external:
+  percentage-service:
+    base-url: http://localhost:${server.port}
+    fixed-percentage: 10
+    failure-rate: 0
+
+resilience4j:
+  retry:
+    instances:
+      percentageService:
+        max-attempts: 3
+        wait-duration: 300ms
+        retry-exceptions:
+          - java.io.IOException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+  circuitbreaker:
+    instances:
+      percentageService:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+  ratelimiter:
+    instances:
+      globalApi:
+        limit-for-period: 3
+        limit-refresh-period: 60s
+        timeout-duration: 0s
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.tenpo.challenge: INFO
+    io.github.resilience4j: DEBUG
